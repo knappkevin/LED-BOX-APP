@@ -6,14 +6,12 @@ class Command {
 }
 
 const List<Command> defaultCommands = [
-  Command(name: 'LED On', value: 'LED_ON'),
-  Command(name: 'LED Off', value: 'LED_OFF'),
-  Command(name: 'Blink', value: 'BLINK'),
-  Command(name: 'Pulse', value: 'PULSE'),
-  Command(name: 'Rainbow', value: 'RAINBOW'),
-  Command(name: 'Clear', value: 'CLEAR'),
-  Command(name: 'Pattern 1', value: 'PATTERN_1'),
-  Command(name: 'Pattern 2', value: 'PATTERN_2'),
-  Command(name: 'Speed Up', value: 'SPEED_UP'),
-  Command(name: 'Speed Down', value: 'SPEED_DOWN'),
+  Command(name: 'RGB Worms', value: 'rgb worms'),
+  Command(name: 'RGB Fleas', value: 'rgb fleas'),
+  Command(name: 'RGB Wave', value: 'rgb wave'),
+  Command(name: 'RGB Fill', value: 'rgb fill'),
+  Command(name: 'RGB Pulse', value: 'rgb pulse'),
+  Command(name: 'Worms', value: 'worms'),
+  Command(name: 'Snake', value: 'snake'),
+  Command(name: 'Life', value: 'life'),
 ];

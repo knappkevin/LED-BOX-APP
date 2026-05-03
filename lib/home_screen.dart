@@ -70,12 +70,20 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  final _customCommandController = TextEditingController();
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<BleProvider>().init();
     });
+  }
+
+  @override
+  void dispose() {
+    _customCommandController.dispose();
+    super.dispose();
   }
 
   @override
@@ -90,6 +98,7 @@ class _HomeScreenState extends State<HomeScreen> {
           _buildConnectionSection(),
           const Divider(height: 1),
           Expanded(child: _buildCommandList()),
+          _buildCustomCommandSection(),
         ],
       ),
     );
@@ -194,6 +203,80 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             );
           },
+        );
+      },
+    );
+  }
+
+  Widget _buildCustomCommandSection() {
+    return Consumer<BleProvider>(
+      builder: (context, provider, _) {
+        return Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.1),
+                blurRadius: 4,
+                offset: const Offset(0, -2),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Custom Command',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey[600],
+                ),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _customCommandController,
+                      enabled: provider.isConnected,
+                      decoration: InputDecoration(
+                        hintText: provider.isConnected
+                            ? 'Enter custom command...'
+                            : 'Connect to device first',
+                        border: const OutlineInputBorder(),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        isDense: true,
+                      ),
+                      onSubmitted: (value) {
+                        if (value.isNotEmpty) {
+                          _sendCommand(context, provider, value);
+                          _customCommandController.clear();
+                        }
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  FilledButton(
+                    onPressed: provider.isConnected
+                        ? () {
+                            final text = _customCommandController.text.trim();
+                            if (text.isNotEmpty) {
+                              _sendCommand(context, provider, text);
+                              _customCommandController.clear();
+                            }
+                          }
+                        : null,
+                    child: const Icon(Icons.send, size: 20),
+                  ),
+                ],
+              ),
+            ],
+          ),
         );
       },
     );
