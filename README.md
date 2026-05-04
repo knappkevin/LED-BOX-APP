@@ -26,22 +26,13 @@ lib/
 flutter run -d linux
 ```
 
-Requires BlueZ running (`systemctl is-active bluetooth` should return `active`).
+`systemctl is-active bluetooth` should return `active`
 
-### Android (APK)
+### APK
 
 ```bash
 flutter build apk --release
 ```
 
 APK output: `build/app/outputs/flutter-apk/app-release.apk`
-
-## Troubleshooting
-
-### No devices appearing on scan
-
-1. Verify BlueZ is running: `systemctl status bluetooth`
-2. Verify adapter is not blocked: `rfkill list`
-3. Ensure your BLE device is powered on and advertising
-4. Restart Bluetooth service: `sudo systemctl restart bluetooth`
 
