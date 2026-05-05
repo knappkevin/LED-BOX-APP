@@ -11,6 +11,9 @@ class BleManager {
   BluetoothCharacteristic? _writeCharacteristic;
   String? _lastDeviceId;
 
+  static const String _nusServiceUuid = '6E400001-B5A3-F393-E0A9-E50E24DCCA9E';
+  static const String _nusRxCharUuid = '6E400002-B5A3-F393-E0A9-E50E24DCCA9E';
+
   BluetoothDevice? get connectedDevice => _connectedDevice;
   bool get isConnected => _connectedDevice != null;
 
@@ -39,9 +42,9 @@ class BleManager {
 
     unawaited(
       FlutterBluePlus.startScan(timeout: Duration(seconds: timeout)).then(
-        (_) => Future.delayed(Duration(seconds: timeout)).then(
-          (_) => completer.complete(),
-        ),
+        (_) => Future.delayed(
+          Duration(seconds: timeout),
+        ).then((_) => completer.complete()),
       ),
     );
 
@@ -74,24 +77,53 @@ class BleManager {
     if (_connectedDevice == null) return;
 
     final services = await _connectedDevice!.discoverServices();
+    print('Discovered ${services.length} services');
+
+    // Look for Nordic UART Service first
+    for (final service in services) {
+      if (service.uuid.toString().toUpperCase() ==
+          _nusServiceUuid.toUpperCase()) {
+        print('Found Nordic UART Service');
+        for (final char in service.characteristics) {
+          if (char.uuid.toString().toUpperCase() ==
+              _nusRxCharUuid.toUpperCase()) {
+            _writeCharacteristic = char;
+            print('Selected NUS RX characteristic: ${char.uuid}');
+            return;
+          }
+        }
+      }
+    }
+
+    // Fallback: first writable characteristic
+    print('Nordic UART Service not found, using fallback');
     for (final service in services) {
       for (final char in service.characteristics) {
         if (char.properties.write || char.properties.writeWithoutResponse) {
           _writeCharacteristic = char;
+          print('Selected fallback characteristic: ${char.uuid}');
           return;
         }
       }
     }
+    print('No writable characteristic found!');
   }
 
   Future<bool> sendCommand(String command) async {
-    if (_writeCharacteristic == null) return false;
+    if (_writeCharacteristic == null) {
+      print('Error: Write characteristic is null');
+      return false;
+    }
 
     try {
-      final bytes = command.codeUnits;
+      final cmd = '${command}\n';
+      final bytes = cmd.codeUnits;
+      print('Sending command: $cmd (${bytes.length} bytes)');
       await _writeCharacteristic!.write(bytes, withoutResponse: false);
+      print('Command sent successfully');
       return true;
     } catch (e) {
+      print('Error sending command: $e');
       return false;
     }
   }
