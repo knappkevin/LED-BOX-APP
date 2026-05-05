@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'ble_manager.dart';
 import 'models/command.dart';
 
@@ -29,6 +30,10 @@ class MyApp extends StatelessWidget {
 
 class BleProvider extends ChangeNotifier {
   final BleManager _bleManager = BleManager();
+  List<Command> _commands = List.from(defaultCommands);
+  static const String _commandsKey = 'custom_commands';
+
+  List<Command> get commands => _commands;
 
   BluetoothDevice? get connectedDevice => _bleManager.connectedDevice;
   bool get isConnected => _bleManager.isConnected;
@@ -39,7 +44,51 @@ class BleProvider extends ChangeNotifier {
   Future<void> init() async {
     await _bleManager.init();
     await _bleManager.reconnectLast();
+    await _loadCommands();
     notifyListeners();
+  }
+
+  Future<void> _loadCommands() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final jsonStr = prefs.getString(_commandsKey);
+      if (jsonStr != null) {
+        _commands = commandsFromJson(jsonStr);
+      }
+    } catch (e) {
+      debugPrint('Error loading commands: $e');
+    }
+  }
+
+  Future<void> _saveCommands() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_commandsKey, commandsToJson(_commands));
+    } catch (e) {
+      debugPrint('Error saving commands: $e');
+    }
+  }
+
+  void addCommand(Command command) {
+    _commands.add(command);
+    _saveCommands();
+    notifyListeners();
+  }
+
+  void updateCommand(int index, Command command) {
+    if (index >= 0 && index < _commands.length) {
+      _commands[index] = command;
+      _saveCommands();
+      notifyListeners();
+    }
+  }
+
+  void deleteCommand(int index) {
+    if (index >= 0 && index < _commands.length) {
+      _commands.removeAt(index);
+      _saveCommands();
+      notifyListeners();
+    }
   }
 
   Future<List<BluetoothDevice>> scanDevices() async {
@@ -185,24 +234,71 @@ class _HomeScreenState extends State<HomeScreen> {
           );
         }
 
-        return ListView.builder(
-          padding: const EdgeInsets.all(8),
-          itemCount: defaultCommands.length,
-          itemBuilder: (context, index) {
-            final command = defaultCommands[index];
-            return Card(
-              margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 0),
-              child: ListTile(
-                title: Text(command.name),
-                subtitle: Text(
-                  command.value,
-                  style: const TextStyle(fontFamily: 'monospace'),
-                ),
-                trailing: const Icon(Icons.send),
-                onTap: () => _sendCommand(context, provider, command.value),
+        final commands = provider.commands;
+
+        return Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                children: [
+                  const Text(
+                    'Commands',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.add),
+                    onPressed: () => _showCommandDialog(context, provider),
+                    tooltip: 'Add Command',
+                  ),
+                ],
               ),
-            );
-          },
+            ),
+            Expanded(
+              child: ListView.builder(
+                padding: const EdgeInsets.all(8),
+                itemCount: commands.length,
+                itemBuilder: (context, index) {
+                  final command = commands[index];
+                  return Card(
+                    margin: const EdgeInsets.symmetric(
+                      vertical: 4,
+                      horizontal: 0,
+                    ),
+                    child: ListTile(
+                      title: Text(command.name),
+                      subtitle: Text(
+                        command.value,
+                        style: const TextStyle(fontFamily: 'monospace'),
+                      ),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.edit, size: 20),
+                            onPressed: () => _showCommandDialog(
+                              context,
+                              provider,
+                              index: index,
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.delete, size: 20),
+                            onPressed: () =>
+                                _deleteCommand(context, provider, index),
+                          ),
+                          const Icon(Icons.send),
+                        ],
+                      ),
+                      onTap: () =>
+                          _sendCommand(context, provider, command.value),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
         );
       },
     );
@@ -297,6 +393,96 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       );
     }
+  }
+
+  void _showCommandDialog(
+    BuildContext context,
+    BleProvider provider, {
+    int? index,
+  }) {
+    final isEditing = index != null;
+    final nameController = TextEditingController(
+      text: isEditing ? provider.commands[index].name : '',
+    );
+    final valueController = TextEditingController(
+      text: isEditing ? provider.commands[index].value : '',
+    );
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(isEditing ? 'Edit Command' : 'Add Command'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameController,
+              decoration: const InputDecoration(
+                labelText: 'Name',
+                hintText: 'e.g., My Animation',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: valueController,
+              decoration: const InputDecoration(
+                labelText: 'Command Value',
+                hintText: 'e.g., my_animation',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final name = nameController.text.trim();
+              final value = valueController.text.trim();
+              if (name.isNotEmpty && value.isNotEmpty) {
+                final command = Command(name: name, value: value);
+                if (isEditing) {
+                  provider.updateCommand(index, command);
+                } else {
+                  provider.addCommand(command);
+                }
+                Navigator.pop(context);
+              }
+            },
+            child: Text(isEditing ? 'Update' : 'Add'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _deleteCommand(BuildContext context, BleProvider provider, int index) {
+    final command = provider.commands[index];
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Command'),
+        content: Text('Delete "${command.name}"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              provider.deleteCommand(index);
+              Navigator.pop(context);
+            },
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _showScanDialog(BuildContext context) {
